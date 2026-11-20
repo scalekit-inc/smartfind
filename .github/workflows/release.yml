@@ -1,0 +1,77 @@
+# Mirrors scalekit-inc/scalekit-sdk-node release flow:
+# GitHub Release → build → npm publish with OIDC provenance (no long-lived NPM_TOKEN required).
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing / provenance (OIDC)
+
+jobs:
+  publish:
+    name: Publish smartfind to npm
+    runs-on: ubuntu-latest
+    environment: release
+    defaults:
+      run:
+        working-directory: packages/smartfind
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: packages/smartfind/package-lock.json
+
+      - name: Validate tag matches package.json version
+        run: |
+          set -euo pipefail
+          RAW="${GITHUB_REF_NAME}"
+          case "$RAW" in
+            smartfind-v*) TAG_VERSION="${RAW#smartfind-v}" ;;
+            v*) TAG_VERSION="${RAW#v}" ;;
+            *)
+              echo "Unexpected release tag: $RAW (use v0.1.0 or smartfind-v0.1.0)"
+              exit 1
+              ;;
+          esac
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+
+      - name: Validate version is not already published on npm
+        run: |
+          set -euo pipefail
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "$PKG_NAME@$PKG_VERSION" version 2>/dev/null; then
+            echo "Version $PKG_VERSION is already published on npm. Bump the version before releasing."
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@11.5.1
+
+      - name: Publish to npm
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            npm publish --tag next --access public --provenance
+          else
+            npm publish --tag latest --access public --provenance
+          fi

@@ -1,0 +1,62 @@
+{
+  "name": "smartfind",
+  "version": "0.1.0",
+  "description": "Discover SMART on FHIR settings for US health systems (Epic, Oracle Health)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./catalog.json": "./data/catalog.json"
+  },
+  "bin": {
+    "smartfind": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "keywords": [
+    "fhir",
+    "smart-on-fhir",
+    "epic",
+    "cerner",
+    "oracle-health",
+    "healthcare",
+    "oauth",
+    "discovery"
+  ],
+  "author": "Smartfind contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scalekit-inc/smartfind.git",
+    "directory": "packages/smartfind"
+  },
+  "homepage": "https://smartfind.apps.grok.bot",
+  "bugs": {
+    "url": "https://github.com/scalekit-inc/smartfind/issues"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "guarded-fetch": "^0.3.0"
+  }
+}

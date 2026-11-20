@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build smartfind
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/smartfind
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: packages/smartfind/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke — CLI search
+        run: |
+          node dist/cli.js search "CarolinaEast" --limit 1 | tee /tmp/search.json
+          grep -q CarolinaEast /tmp/search.json
+
+      - name: Pack dry-run
+        run: npm pack --dry-run
