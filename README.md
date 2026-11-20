@@ -85,13 +85,13 @@ Publishing runs from GitHub Actions with [npm trusted publishing](https://docs.n
 
 | Trigger | Workflow |
 |---|---|
-| Push or PR to `main` | `ci.yml`: builds the package, runs a CLI smoke test and `npm pack --dry-run`, then builds and lints the demo site |
+| Push or PR to `master` | `ci.yml`: builds the package, runs a CLI smoke test and `npm pack --dry-run`, then builds and lints the demo site |
 | GitHub Release published | `release.yml`: checks the tag matches the version, builds once, publishes both names with provenance |
 
 To release a version:
 
 ```bash
-# 1. Bump the version in packages/smartfind/package.json, commit and push to main
+# 1. Bump the version in packages/smartfind/package.json, commit and push to master
 # 2. Create a GitHub Release whose tag matches it (v0.2.0 or smartfind-v0.2.0)
 gh release create v0.2.0 --title "smartfind v0.2.0" --generate-notes
 ```
