@@ -2,6 +2,9 @@ import { GuardedFetchError, guardedFetch } from "guarded-fetch";
 import type { CatalogEntry, SmartConfiguration, SmartSettings } from "./types.js";
 import { normalizeFhirBase } from "./ssrf.js";
 
+/** Default time limit for one discovery request; pass your own `signal` to override. */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
 export function smartConfigurationUrl(fhirBase: string): string {
   return `${fhirBase.replace(/\/+$/, "")}/.well-known/smart-configuration`;
 }
@@ -55,7 +58,7 @@ export async function fetchSmartConfiguration(
     const { signal, headers, ...rest } = init || {};
     const res = await guardedFetch(url, {
       ...rest,
-      ...(signal ? { signal } : {}),
+      signal: signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
       headers: {
         Accept: "application/json",
         ...(headers || {}),
@@ -69,6 +72,9 @@ export async function fetchSmartConfiguration(
   } catch (err) {
     if (err instanceof GuardedFetchError) {
       throw new Error(`Blocked unsafe FHIR URL (${err.code}): ${url}`);
+    }
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error(`SMART configuration fetch timed out or was aborted for ${url}`);
     }
     throw err;
   }

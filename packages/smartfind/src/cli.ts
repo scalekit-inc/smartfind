@@ -6,7 +6,7 @@ function usage(): never {
   console.log(`smartfind — discover provider SMART on FHIR settings
 
 Usage:
-  smartfind search <query> [--persona provider|patient|both|any] [--vendor epic|oracle-health] [--state CA] [--limit 10]
+  smartfind search <query> [--persona provider|patient|both|any] [--vendor epic|oracle-health] [--state CA] [--limit 10] [--enrich]
   smartfind enrich <fhir-base-url>
   smartfind scalekit <fhir-base-url>
 
@@ -15,6 +15,14 @@ Examples:
   smartfind enrich https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4
   smartfind scalekit https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d
 `);
+  process.exit(1);
+}
+
+const PERSONAS = ["provider", "patient", "both", "any"] as const;
+type Persona = (typeof PERSONAS)[number];
+
+function fail(message: string): never {
+  console.error(message);
   process.exit(1);
 }
 
@@ -29,14 +37,17 @@ async function main() {
 
   if (cmd === "search") {
     const query = rest.find((a) => !a.startsWith("--")) || "";
-    const persona = (argValue(rest, "--persona") || "provider") as
-      | "provider"
-      | "patient"
-      | "both"
-      | "any";
+    const personaArg = argValue(rest, "--persona") || "provider";
+    if (!PERSONAS.includes(personaArg as Persona)) {
+      fail(`--persona must be one of: ${PERSONAS.join(", ")}`);
+    }
+    const persona = personaArg as Persona;
     const vendor = argValue(rest, "--vendor");
     const state = argValue(rest, "--state");
     const limit = Number(argValue(rest, "--limit") || "10");
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      fail("--limit must be a whole number from 1 to 100");
+    }
     const enrich = rest.includes("--enrich");
 
     if (enrich && query) {
