@@ -1,5 +1,8 @@
 # Mirrors scalekit-inc/scalekit-sdk-node release flow:
 # GitHub Release → build → npm publish with OIDC provenance (no long-lived NPM_TOKEN required).
+# The same build is published under two names: smartfind and @scalekit-sdk/smartfind.
+# Each name needs its own trusted publisher on npmjs.com (repo scalekit-inc/smartfind,
+# workflow release.yml, environment release).
 name: Release
 
 on:
@@ -52,12 +55,13 @@ jobs:
       - name: Validate version is not already published on npm
         run: |
           set -euo pipefail
-          PKG_NAME=$(node -p "require('./package.json').name")
           PKG_VERSION=$(node -p "require('./package.json').version")
-          if npm view "$PKG_NAME@$PKG_VERSION" version 2>/dev/null; then
-            echo "Version $PKG_VERSION is already published on npm. Bump the version before releasing."
-            exit 1
-          fi
+          for NAME in smartfind @scalekit-sdk/smartfind; do
+            if npm view "$NAME@$PKG_VERSION" version 2>/dev/null; then
+              echo "$NAME@$PKG_VERSION is already published on npm. Bump the version before releasing."
+              exit 1
+            fi
+          done
 
       - name: Install
         run: npm ci
@@ -68,10 +72,14 @@ jobs:
       - name: Upgrade npm for trusted publishing
         run: npm install -g npm@11.5.1
 
-      - name: Publish to npm
+      - name: Publish to npm (smartfind and @scalekit-sdk/smartfind)
+        env:
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
-            npm publish --tag next --access public --provenance
-          else
-            npm publish --tag latest --access public --provenance
-          fi
+          set -euo pipefail
+          TAG=latest
+          if [ "$PRERELEASE" = "true" ]; then TAG=next; fi
+          # --ignore-scripts: the build above already produced dist/; don't rebuild between the two publishes
+          npm publish --tag "$TAG" --access public --provenance --ignore-scripts
+          npm pkg set name=@scalekit-sdk/smartfind
+          npm publish --tag "$TAG" --access public --provenance --ignore-scripts

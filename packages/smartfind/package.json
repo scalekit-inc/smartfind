@@ -36,14 +36,14 @@
     "oauth",
     "discovery"
   ],
-  "author": "Smartfind contributors",
+  "author": "Scalekit Inc.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/scalekit-inc/smartfind.git",
     "directory": "packages/smartfind"
   },
-  "homepage": "https://smartfind.apps.grok.bot",
+  "homepage": "https://github.com/scalekit-inc/smartfind#readme",
   "bugs": {
     "url": "https://github.com/scalekit-inc/smartfind/issues"
   },
@@ -54,6 +54,7 @@
     "access": "public"
   },
   "devDependencies": {
+    "@types/node": "^20.19.0",
     "typescript": "^5.7.3"
   },
   "dependencies": {

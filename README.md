@@ -4,8 +4,7 @@ Open-source **SMART on FHIR discovery** for US health systems.
 
 Help developers (and platforms like [Scalekit](https://docs.scalekit.com/agentkit/connectors/customsmartfhir/)) go from *“Mayo Clinic”* → authorize URL, token URL, and `aud` — without hand-collecting hospital FHIR settings.
 
-**Live demo:** [https://smartfind.apps.grok.bot](https://smartfind.apps.grok.bot)  
-**Developers guide (in the demo):** [/developers](https://smartfind.apps.grok.bot/developers)
+**Try it:** `npx smartfind search "Mayo Clinic"`, or run the demo site locally (see [Run the demo](#run-the-demo-locally)).
 
 ---
 
@@ -13,9 +12,9 @@ Help developers (and platforms like [Scalekit](https://docs.scalekit.com/agentki
 
 | Artifact | Who uses it | How it ships |
 |---|---|---|
-| **`smartfind` npm package** | App backends / CLIs | `npm i smartfind` — search + enrich in *their* process |
+| **`smartfind` npm package** | App backends / CLIs | `npm i smartfind` (also published as `@scalekit-sdk/smartfind`) — search + enrich in *their* process |
 | **This git repo** | Contributors / self-hosters | Public GitHub clone; demo app + package source |
-| **Demo web app** | Humans trying the UX | Hosted (Cursor Apps / Vercel / etc.); optional HTTP API |
+| **Demo web app** | Humans trying the UX | Self-hosted (Vercel or any Node.js host); optional HTTP API |
 
 ```
 End user picks hospital in YOUR product
@@ -78,65 +77,26 @@ npm run cli -- search "AdventHealth" --limit 5
 
 ---
 
-## Publish `smartfind` to npm
+## Releasing to npm
 
-### Recommended: public GitHub repo + GitHub Actions
+The package is published under two names from the same build: `smartfind` and `@scalekit-sdk/smartfind`.
 
-For OSS discovery (stars / SEO) and the CI you already know, **make GitHub the public home** of this repo. Workflows live in `.github/workflows/` (same pattern as [`scalekit-sdk-node`](https://github.com/scalekit-inc/scalekit-sdk-node/blob/main/.github/workflows/release.yml)).
-
-**Secrets on a public repo — yes, this is safe**
-
-| Mechanism | Visible to the public? |
-|---|---|
-| **Repository / Environment secrets** (`Settings → Secrets`) | No. Encrypted at rest; only injected into jobs you authorize. Not in logs unless you `echo` them (Actions redacts common secret values). |
-| **Fork PRs** | Secrets are **not** available to workflows from forks by default. Your `release` job only runs on `release: published`, which forks cannot trigger. |
-| **npm Trusted Publishing (OIDC)** — what this repo uses | Even better: **no long-lived `NPM_TOKEN`**. GitHub proves identity to npm via OIDC (`id-token: write` + `npm publish --provenance`). |
-
-Do **not** commit tokens, put them in workflow YAML, or print them in steps.
-
-**One-time setup**
-
-1. Create the public GitHub repo **`scalekit-inc/smartfind`** (empty, no README).
-2. Push this code (from a machine with `gh` / GitHub access to the org):
-
-```bash
-gh repo create scalekit-inc/smartfind --public --description "Discover SMART on FHIR settings for US health systems" --source=. --remote=github --push
-# or, if the empty repo already exists:
-git remote add github https://github.com/scalekit-inc/smartfind.git
-git push -u github main
-```
-
-3. On [npmjs.com](https://www.npmjs.com) → package settings → **Trusted Publisher**: GitHub Actions, repo `scalekit-inc/smartfind`, workflow `release.yml`, environment `release`.
-4. In the GitHub repo → Settings → Environments → create **`release`**. No `NPM_TOKEN` needed if trusted publishing is configured.
-5. Grant the Cursor GitHub App access to `scalekit-inc/smartfind` if you want agents to work on it later.
-
-**What CI does**
+Publishing runs from GitHub Actions with [npm trusted publishing](https://docs.npmjs.com/trusted-publishers), so no npm token is stored anywhere:
 
 | Trigger | Workflow |
 |---|---|
-| Push / PR to `main` | `ci.yml` — install, build, CLI smoke, `npm pack --dry-run` |
-| GitHub Release published | `release.yml` — version checks, build, `npm publish --provenance` |
+| Push or PR to `main` | `ci.yml`: builds the package, runs a CLI smoke test and `npm pack --dry-run`, then builds and lints the demo site |
+| GitHub Release published | `release.yml`: checks the tag matches the version, builds once, publishes both names with provenance |
 
-**Release a version**
-
-```bash
-# 1. Bump version in packages/smartfind/package.json
-git add packages/smartfind/package.json
-git commit -m "Release smartfind v0.1.0"
-git push origin main
-
-# 2. Create a GitHub Release whose tag matches package.json (v0.1.0 or smartfind-v0.1.0)
-gh release create v0.1.0 --title "smartfind v0.1.0" --generate-notes
-```
-
-### Manual publish (laptop)
+To release a version:
 
 ```bash
-npm login
-cd packages/smartfind
-npm ci && npm run build
-npm publish --access public
+# 1. Bump the version in packages/smartfind/package.json, commit and push to main
+# 2. Create a GitHub Release whose tag matches it (v0.2.0 or smartfind-v0.2.0)
+gh release create v0.2.0 --title "smartfind v0.2.0" --generate-notes
 ```
+
+A pre-release publishes under the `next` dist-tag; a normal release under `latest`.
 
 ---
 

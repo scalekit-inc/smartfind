@@ -22,7 +22,7 @@ export function toScalekitConnection(settings: SmartSettings): ScalekitSmartConn
 
   if (settings.vendor === "epic") {
     notes.push(
-      "Epic: register the app in fhir.epic.com / App Orchard. Production iss/aud is per health system.",
+      "Epic: register the app at fhir.epic.com, then have each health system activate it. Production iss/aud is per health system.",
     );
   }
   if (settings.vendor === "oracle-health") {

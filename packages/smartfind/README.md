@@ -8,6 +8,8 @@ your OAuth client (or [Scalekit’s SMART connector](https://docs.scalekit.com/a
 
 ```bash
 npm i smartfind
+# or the same package under the Scalekit scope:
+npm i @scalekit-sdk/smartfind
 ```
 
 ## Who this is for
@@ -67,7 +69,7 @@ npx smartfind scalekit https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b7
 Catalog JSON is also importable:
 
 ```ts
-import catalog from "smartfind/catalog.json" assert { type: "json" };
+import catalog from "smartfind/catalog.json" with { type: "json" };
 ```
 
 ## Catalog
