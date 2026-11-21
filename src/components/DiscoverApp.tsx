@@ -1,1 +1,1 @@
-PLACEHOLDER_WILL_REPLACE
+@file:///tmp/discover-content-only.txt
