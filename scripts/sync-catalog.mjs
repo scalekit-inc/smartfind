@@ -20,9 +20,14 @@ if (existsSync(gz)) {
   process.exit(1);
 }
 
+const gzBytes = existsSync(gz) ? readFileSync(gz) : null;
+
 for (const dir of [join(root, "data"), join(root, "public/data")]) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "catalog.json"), json);
+  // Hosted Cursor apps resolve /var/task/data/catalog.json.gz more reliably
+  // when the gzipped file also lives at the repo root data/ path.
+  if (gzBytes) writeFileSync(join(dir, "catalog.json.gz"), gzBytes);
 }
 
 const catalog = JSON.parse(json);
