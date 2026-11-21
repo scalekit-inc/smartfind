@@ -1,17 +1,27 @@
-import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Catalog, CatalogEntry, SearchOptions } from "./types.js";
 import { searchEntries } from "./search-core.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const catalogPath = join(here, "..", "data", "catalog.json");
+const dataDir = join(here, "..", "data");
+const catalogJsonPath = join(dataDir, "catalog.json");
+const catalogGzPath = join(dataDir, "catalog.json.gz");
 
 let cached: Catalog | null = null;
 
 function loadDefaultCatalog(): Catalog {
   if (cached) return cached;
-  cached = JSON.parse(readFileSync(catalogPath, "utf8")) as Catalog;
+
+  // Prefer gzipped catalog (full vendor lists); fall back to plain JSON.
+  if (existsSync(catalogGzPath)) {
+    const raw = gunzipSync(readFileSync(catalogGzPath)).toString("utf8");
+    cached = JSON.parse(raw) as Catalog;
+    return cached;
+  }
+  cached = JSON.parse(readFileSync(catalogJsonPath, "utf8")) as Catalog;
   return cached;
 }
 

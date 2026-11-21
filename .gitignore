@@ -42,6 +42,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Generated catalog copies (source of truth: packages/smartfind/data/catalog.json)
+# Generated catalog copies. Source of truth for git: packages/smartfind/data/catalog.json.gz
 /data/catalog.json
 /public/data/catalog.json
+# Uncompressed catalog is regenerated locally / in CI from the .gz (too large for git).
+/packages/smartfind/data/catalog.json

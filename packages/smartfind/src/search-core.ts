@@ -4,17 +4,48 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** True when `token` appears as its own word in normalized haystack. */
+function wordMatch(hay: string, token: string): boolean {
+  return new RegExp(`(?:^| )${escapeRe(token)}(?: |$)`).test(` ${hay} `);
+}
+
 function scoreEntry(entry: CatalogEntry, tokens: string[]): number {
   if (tokens.length === 0) return 1;
+  const name = normalize(entry.name);
   const hay = normalize(
-    [entry.name, ...(entry.aliases || []), entry.city || "", entry.state || "", entry.vendor, entry.fhirBase].join(" "),
+    [entry.name, ...(entry.aliases || []), entry.city || "", entry.state || "", entry.vendor].join(
+      " ",
+    ),
   );
   let score = 0;
   for (const token of tokens) {
     if (!token) continue;
-    if (hay.includes(token)) score += token.length >= 4 ? 3 : 2;
-    else if (normalize(entry.name).startsWith(token)) score += 4;
-    else return -1;
+    if (name === token) {
+      score += 20;
+      continue;
+    }
+    if (name.startsWith(`${token} `) || name.startsWith(token)) {
+      score += 12;
+      continue;
+    }
+    if (wordMatch(name, token)) {
+      score += 10;
+      continue;
+    }
+    if (wordMatch(hay, token)) {
+      score += 6;
+      continue;
+    }
+    // Substring hits only for longer tokens (avoids "mayo" → "Tamayo").
+    if (token.length >= 5 && hay.includes(token)) {
+      score += 2;
+      continue;
+    }
+    return -1;
   }
   if (entry.persona === "provider" || entry.persona === "both") score += 1;
   if (entry.source === "sandbox") score += 2;
