@@ -14,8 +14,6 @@ type VendorFilter =
   | "eclinicalworks"
   | "veradigm";
 
-type OutputTab = "fields" | "scalekit" | "embed";
-
 interface EnrichResult {
   entry?: CatalogEntry;
   settings: {
@@ -39,6 +37,8 @@ interface EnrichResult {
   };
 }
 
+type OutputTab = "fields" | "scalekit" | "embed";
+
 export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
   const [catalogMeta, setCatalogMeta] = useState<{
     count: number;
@@ -50,7 +50,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
   const [persona, setPersona] = useState<Persona>("any");
   const [vendor, setVendor] = useState<VendorFilter>("any");
   const [matches, setMatches] = useState<CatalogEntry[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [selected, setSelected] = useState<CatalogEntry | null>(null);
   const [enrich, setEnrich] = useState<EnrichResult | null>(null);
   const [manualUrl, setManualUrl] = useState("");
@@ -81,19 +81,23 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
     };
   }, []);
 
+  const searchQuery = deferredQuery.trim();
+  const searching = Boolean(searchQuery) && searchBusy;
+  // Derive empty results when the box is cleared — avoid sync setState in an effect.
+  const visibleMatches = searchQuery ? matches : [];
+
   // Server-side search — avoid downloading the full multi‑MB catalog to the browser.
   useEffect(() => {
-    const q = deferredQuery.trim();
-    if (!q) {
-      setMatches([]);
-      setSearching(false);
-      return;
-    }
+    if (!searchQuery) return;
     let cancelled = false;
-    setSearching(true);
-    const params = new URLSearchParams({ q, persona, limit: "15" });
+    const params = new URLSearchParams({
+      q: searchQuery,
+      persona,
+      limit: "15",
+    });
     if (vendor !== "any") params.set("vendor", vendor);
     const handle = window.setTimeout(() => {
+      setSearchBusy(true);
       fetch(`/api/search?${params}`)
         .then((res) => res.json())
         .then((data: { matches?: CatalogEntry[]; error?: string }) => {
@@ -108,14 +112,14 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
           }
         })
         .finally(() => {
-          if (!cancelled) setSearching(false);
+          if (!cancelled) setSearchBusy(false);
         });
     }, 150);
     return () => {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [deferredQuery, persona, vendor]);
+  }, [searchQuery, persona, vendor]);
 
   const vendorCounts = catalogMeta
     ? {
@@ -142,6 +146,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Enrichment failed");
       setEnrich(data);
+      // Scroll output into view on small screens
       requestAnimationFrame(() => {
         document.getElementById("smart-output")?.scrollIntoView({
           behavior: "smooth",
@@ -163,23 +168,16 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
 
   const indexed = catalogMeta?.count ?? catalogCount;
   const selectedName = selected?.name || enrich?.entry?.name || "Selected system";
-  const vendorOptions = [
-    ["any", "All vendors"],
-    ["epic", vendorCounts ? `Epic (${vendorCounts.epic.toLocaleString()})` : "Epic"],
-    ["oracle-health", vendorCounts ? `Oracle Health (${vendorCounts.oracle.toLocaleString()})` : "Oracle Health"],
-    ["athena", vendorCounts ? `athena (${vendorCounts.athena.toLocaleString()})` : "athena"],
-    ["advancedmd", vendorCounts ? `AdvancedMD (${vendorCounts.advancedmd.toLocaleString()})` : "AdvancedMD"],
-    ["eclinicalworks", vendorCounts ? `eCW (${vendorCounts.eclinicalworks.toLocaleString()})` : "eCW"],
-    ["veradigm", vendorCounts ? `Veradigm (${vendorCounts.veradigm.toLocaleString()})` : "Veradigm"],
-  ] as const;
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
+      {/* STEP 1 — INPUT */}
       <section aria-labelledby="step-search" className="space-y-3">
         <StepLabel n={1} id="step-search" title="Search" />
         <p className="text-sm text-[var(--ink-soft)]">
           Type a hospital or clinic name. Filter by EHR vendor if you already know it.
         </p>
+
         <div className="rounded-2xl bg-white/85 p-3 ring-1 ring-[var(--line)] shadow-[0_16px_40px_rgba(16,36,31,0.06)]">
           <label htmlFor="hospital-search" className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-[var(--ink-soft)]">
             Health system name
@@ -193,8 +191,47 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
             autoComplete="off"
             autoFocus
           />
+
           <div className="mt-3 flex flex-wrap gap-2">
-            {vendorOptions.map(([value, label]) => (
+            {(
+              (
+                [
+                  ["any", `All vendors`],
+                  [
+                    "epic",
+                    vendorCounts ? `Epic (${vendorCounts.epic.toLocaleString()})` : "Epic",
+                  ],
+                  [
+                    "oracle-health",
+                    vendorCounts
+                      ? `Oracle Health (${vendorCounts.oracle.toLocaleString()})`
+                      : "Oracle Health",
+                  ],
+                  [
+                    "athena",
+                    vendorCounts ? `athena (${vendorCounts.athena.toLocaleString()})` : "athena",
+                  ],
+                  [
+                    "advancedmd",
+                    vendorCounts
+                      ? `AdvancedMD (${vendorCounts.advancedmd.toLocaleString()})`
+                      : "AdvancedMD",
+                  ],
+                  [
+                    "eclinicalworks",
+                    vendorCounts
+                      ? `eCW (${vendorCounts.eclinicalworks.toLocaleString()})`
+                      : "eCW",
+                  ],
+                  [
+                    "veradigm",
+                    vendorCounts
+                      ? `Veradigm (${vendorCounts.veradigm.toLocaleString()})`
+                      : "Veradigm",
+                  ],
+                ] as const
+              )
+            ).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -209,6 +246,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
               </button>
             ))}
           </div>
+
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-[var(--ink-soft)]">
               Access type
@@ -231,6 +269,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
             </span>
           </div>
         </div>
+
         <details className="rounded-xl bg-white/50 px-3 py-2 text-xs text-[var(--ink-soft)] ring-1 ring-[var(--line)]">
           <summary className="cursor-pointer font-medium text-[var(--ink)]">
             Or paste a FHIR base URL
@@ -257,13 +296,15 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
         </details>
       </section>
 
+      {/* STEP 2 — PICK */}
       <section aria-labelledby="step-pick" className="space-y-3">
         <StepLabel n={2} id="step-pick" title="Pick a system" />
         <p className="text-sm text-[var(--ink-soft)]">
           Click a result to fetch live SMART discovery for that FHIR base.
         </p>
+
         <ul className="overflow-hidden rounded-2xl bg-white/85 ring-1 ring-[var(--line)]">
-          {matches.length === 0 && (
+          {visibleMatches.length === 0 && (
             <li className="px-4 py-8 text-sm text-[var(--ink-soft)]">
               {catalogMeta
                 ? query
@@ -274,7 +315,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
                 : "Loading catalog…"}
             </li>
           )}
-          {matches.map((m) => {
+          {visibleMatches.map((m) => {
             const active = selected?.id === m.id;
             return (
               <li key={m.id} className="border-b border-[var(--line)] last:border-b-0">
@@ -303,31 +344,43 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
         </ul>
       </section>
 
-      <section id="smart-output" aria-labelledby="step-output" className="space-y-3">
+      {/* STEP 3 — OUTPUT */}
+      <section
+        id="smart-output"
+        aria-labelledby="step-output"
+        className="space-y-3"
+      >
         <StepLabel n={3} id="step-output" title="Output — SMART settings" />
         <p className="text-sm text-[var(--ink-soft)]">
           These are the values your app needs for OAuth. Copy fields, Scalekit JSON, or embed snippets below.
         </p>
-        <div className="rounded-2xl bg-[var(--ink)] p-5 text-[var(--mist)] shadow-[0_20px_50px_rgba(16,36,31,0.06)]">
+
+        <div className="rounded-2xl bg-[var(--ink)] p-5 text-[var(--mist)] shadow-[0_20px_50px_rgba(16,36,31,0.16)]">
           {!selected && !enrich && !error && !enriching && (
             <p className="text-sm text-white/60">
               Select a system in step 2. Output appears here — not beside the list.
             </p>
           )}
+
           {enriching && (
             <p className="text-sm text-white/70">Fetching /.well-known/smart-configuration…</p>
           )}
+
           {error && (
             <p className="rounded-xl bg-red-500/15 px-3 py-2 text-sm text-red-100 ring-1 ring-red-400/30">
               {error}
             </p>
           )}
+
           {enrich && (
             <>
               <div className="mb-4">
                 <p className="text-xs uppercase tracking-[0.14em] text-white/45">For</p>
-                <h3 className="font-display text-2xl font-semibold text-white">{selectedName}</h3>
+                <h3 className="font-display text-2xl font-semibold text-white">
+                  {selectedName}
+                </h3>
               </div>
+
               <div className="mb-4 flex flex-wrap gap-2">
                 {(
                   [
@@ -350,17 +403,45 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
                   </button>
                 ))}
               </div>
+
               {outputTab === "fields" && (
                 <div className="space-y-3">
-                  <Field label="Audience (aud) / FHIR base" value={enrich.scalekit.audience} copied={copied === "aud"} onCopy={() => copy("aud", enrich.scalekit.audience)} />
-                  <Field label="Authorization endpoint" value={enrich.scalekit.authorizationEndpoint} copied={copied === "auth"} onCopy={() => copy("auth", enrich.scalekit.authorizationEndpoint)} />
-                  <Field label="Token endpoint" value={enrich.scalekit.tokenEndpoint} copied={copied === "token"} onCopy={() => copy("token", enrich.scalekit.tokenEndpoint)} />
-                  <Field label="FHIR server domain" value={enrich.scalekit.fhirServerDomain} copied={copied === "domain"} onCopy={() => copy("domain", enrich.scalekit.fhirServerDomain)} />
+                  <Field
+                    label="Audience (aud) / FHIR base"
+                    value={enrich.scalekit.audience}
+                    copied={copied === "aud"}
+                    onCopy={() => copy("aud", enrich.scalekit.audience)}
+                  />
+                  <Field
+                    label="Authorization endpoint"
+                    value={enrich.scalekit.authorizationEndpoint}
+                    copied={copied === "auth"}
+                    onCopy={() => copy("auth", enrich.scalekit.authorizationEndpoint)}
+                  />
+                  <Field
+                    label="Token endpoint"
+                    value={enrich.scalekit.tokenEndpoint}
+                    copied={copied === "token"}
+                    onCopy={() => copy("token", enrich.scalekit.tokenEndpoint)}
+                  />
+                  <Field
+                    label="FHIR server domain"
+                    value={enrich.scalekit.fhirServerDomain}
+                    copied={copied === "domain"}
+                    onCopy={() => copy("domain", enrich.scalekit.fhirServerDomain)}
+                  />
                   <div>
-                    <div className="mb-1 text-xs uppercase tracking-[0.14em] text-white/50">Suggested scopes</div>
+                    <div className="mb-1 text-xs uppercase tracking-[0.14em] text-white/50">
+                      Suggested scopes
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
                       {enrich.scalekit.suggestedScopes.map((s) => (
-                        <code key={s} className="rounded-md bg-white/10 px-2 py-1 text-[11px] text-[var(--sand)]">{s}</code>
+                        <code
+                          key={s}
+                          className="rounded-md bg-white/10 px-2 py-1 text-[11px] text-[var(--sand)]"
+                        >
+                          {s}
+                        </code>
                       ))}
                     </div>
                   </div>
@@ -371,6 +452,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
                   </ul>
                 </div>
               )}
+
               {outputTab === "scalekit" && (
                 <div className="space-y-3">
                   <p className="text-sm text-white/70">
@@ -382,14 +464,22 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
                   <button
                     type="button"
                     className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
-                    onClick={() => copy("json", JSON.stringify(enrich.scalekit, null, 2))}
+                    onClick={() =>
+                      copy("json", JSON.stringify(enrich.scalekit, null, 2))
+                    }
                   >
                     {copied === "json" ? "Copied" : "Copy Scalekit JSON"}
                   </button>
                 </div>
               )}
+
               {outputTab === "embed" && (
-                <EmbedSnippets fhirBase={enrich.scalekit.audience} name={selectedName} copied={copied} onCopy={copy} />
+                <EmbedSnippets
+                  fhirBase={enrich.scalekit.audience}
+                  name={selectedName}
+                  copied={copied}
+                  onCopy={copy}
+                />
               )}
             </>
           )}
