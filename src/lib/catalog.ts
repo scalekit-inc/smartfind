@@ -1,16 +1,12 @@
-import { createRequire } from "node:module";
-import { setCatalog, type Catalog } from "smartfind";
-
-const require = createRequire(import.meta.url);
+import { getCatalog, setCatalog, type Catalog } from "smartfind";
 
 let catalog: Catalog | null = null;
 let loaded = false;
 
-/** Load the packaged catalog at runtime (avoids bundling a 40MB+ JSON into Next). */
+/** Load via the package (supports catalog.json.gz) — do not import the giant JSON. */
 export function ensureCatalog(): Catalog {
   if (!loaded) {
-    // Resolves to packages/smartfind/data/catalog.json via the workspace package export.
-    catalog = require("smartfind/catalog.json") as Catalog;
+    catalog = getCatalog();
     setCatalog(catalog);
     loaded = true;
   }

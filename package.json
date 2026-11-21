@@ -6,7 +6,7 @@
   "scripts": {
     "catalog": "NODE_OPTIONS=--max-old-space-size=8192 node scripts/build-catalog.mjs",
     "catalog:refresh-lantern": "NODE_OPTIONS=--max-old-space-size=8192 node scripts/build-catalog.mjs --refresh-lantern",
-    "sync-catalog": "mkdir -p data public/data && cp packages/smartfind/data/catalog.json data/catalog.json && cp packages/smartfind/data/catalog.json public/data/catalog.json",
+    "sync-catalog": "node scripts/sync-catalog.mjs",
     "build:package": "npm run build --prefix packages/smartfind",
     "dev": "npm run sync-catalog && npm run build:package && next dev -H 127.0.0.1 -p 3847",
     "build": "npm run sync-catalog && npm run build:package && next build",

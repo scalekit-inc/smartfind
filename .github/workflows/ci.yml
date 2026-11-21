@@ -63,10 +63,7 @@ jobs:
         run: npm ci
 
       - name: Sync catalog copies for Next assets
-        run: |
-          mkdir -p data public/data
-          cp packages/smartfind/data/catalog.json data/catalog.json
-          cp packages/smartfind/data/catalog.json public/data/catalog.json
+        run: npm run sync-catalog
 
       - name: Lint
         run: npm run lint
