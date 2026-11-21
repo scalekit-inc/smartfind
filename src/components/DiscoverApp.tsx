@@ -1,14 +1,18 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import {
-  type Catalog,
-  type CatalogEntry,
-  searchEntries,
-} from "@/lib/search-entries";
+import { useDeferredValue, useEffect, useState } from "react";
+import { type CatalogEntry } from "@/lib/search-entries";
+import { EmbedSnippets, StepLabel, Badge, Field, displayVendor } from "./DiscoverAppExtras";
 
 type Persona = "provider" | "patient" | "both" | "any";
-type VendorFilter = "any" | "epic" | "oracle-health";
+type VendorFilter =
+  | "any"
+  | "epic"
+  | "oracle-health"
+  | "athena"
+  | "advancedmd"
+  | "eclinicalworks"
+  | "veradigm";
 
 interface EnrichResult {
   entry?: CatalogEntry;
@@ -36,12 +40,17 @@ interface EnrichResult {
 type OutputTab = "fields" | "scalekit" | "embed";
 
 export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [catalogMeta, setCatalogMeta] = useState<{
+    count: number;
+    vendors: Record<string, number>;
+  } | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const [persona, setPersona] = useState<Persona>("any");
   const [vendor, setVendor] = useState<VendorFilter>("any");
+  const [matches, setMatches] = useState<CatalogEntry[]>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [selected, setSelected] = useState<CatalogEntry | null>(null);
   const [enrich, setEnrich] = useState<EnrichResult | null>(null);
   const [manualUrl, setManualUrl] = useState("");
@@ -52,13 +61,15 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/data/catalog.json")
+    fetch("/api/catalog")
       .then((res) => {
         if (!res.ok) throw new Error(`Catalog HTTP ${res.status}`);
         return res.json();
       })
-      .then((data: Catalog) => {
-        if (!cancelled) setCatalog(data);
+      .then((data: { count: number; vendors?: Record<string, number> }) => {
+        if (!cancelled) {
+          setCatalogMeta({ count: data.count, vendors: data.vendors || {} });
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -70,25 +81,56 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
     };
   }, []);
 
-  const matches = useMemo(() => {
-    if (!catalog) return [];
-    // Require a query so step 2 doesn't dump the whole catalog unprompted.
-    if (!deferredQuery.trim()) return [];
-    return searchEntries(catalog, {
-      query: deferredQuery,
-      persona,
-      vendor: vendor === "any" ? undefined : vendor,
-      limit: 15,
-    });
-  }, [catalog, deferredQuery, persona, vendor]);
+  const searchQuery = deferredQuery.trim();
+  const searching = Boolean(searchQuery) && searchBusy;
+  // Derive empty results when the box is cleared — avoid sync setState in an effect.
+  const visibleMatches = searchQuery ? matches : [];
 
-  const vendorCounts = useMemo(() => {
-    if (!catalog) return { epic: 0, oracle: 0 };
-    return {
-      epic: catalog.entries.filter((e) => e.vendor === "epic").length,
-      oracle: catalog.entries.filter((e) => e.vendor === "oracle-health").length,
+  // Server-side search — avoid downloading the full multi‑MB catalog to the browser.
+  useEffect(() => {
+    if (!searchQuery) return;
+    let cancelled = false;
+    const params = new URLSearchParams({
+      q: searchQuery,
+      persona,
+      limit: "15",
+    });
+    if (vendor !== "any") params.set("vendor", vendor);
+    const handle = window.setTimeout(() => {
+      setSearchBusy(true);
+      fetch(`/api/search?${params}`)
+        .then((res) => res.json())
+        .then((data: { matches?: CatalogEntry[]; error?: string }) => {
+          if (cancelled) return;
+          if (data.error) throw new Error(data.error);
+          setMatches(data.matches || []);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setMatches([]);
+            setError(err instanceof Error ? err.message : "Search failed");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setSearchBusy(false);
+        });
+    }, 150);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
     };
-  }, [catalog]);
+  }, [searchQuery, persona, vendor]);
+
+  const vendorCounts = catalogMeta
+    ? {
+        epic: catalogMeta.vendors.epic || 0,
+        oracle: catalogMeta.vendors["oracle-health"] || 0,
+        athena: catalogMeta.vendors.athena || 0,
+        advancedmd: catalogMeta.vendors.advancedmd || 0,
+        eclinicalworks: catalogMeta.vendors.eclinicalworks || 0,
+        veradigm: catalogMeta.vendors.veradigm || 0,
+      }
+    : null;
 
   async function runEnrich(opts: { id?: string; fhirBase?: string; entry?: CatalogEntry }) {
     if (opts.entry) setSelected(opts.entry);
@@ -124,7 +166,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
     window.setTimeout(() => setCopied(null), 1600);
   }
 
-  const indexed = catalog?.count ?? catalogCount;
+  const indexed = catalogMeta?.count ?? catalogCount;
   const selectedName = selected?.name || enrich?.entry?.name || "Selected system";
 
   return (
@@ -152,11 +194,43 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
 
           <div className="mt-3 flex flex-wrap gap-2">
             {(
-              [
-                ["any", `All vendors`],
-                ["epic", `Epic (${vendorCounts.epic})`],
-                ["oracle-health", `Oracle Health (${vendorCounts.oracle})`],
-              ] as const
+              (
+                [
+                  ["any", `All vendors`],
+                  [
+                    "epic",
+                    vendorCounts ? `Epic (${vendorCounts.epic.toLocaleString()})` : "Epic",
+                  ],
+                  [
+                    "oracle-health",
+                    vendorCounts
+                      ? `Oracle Health (${vendorCounts.oracle.toLocaleString()})`
+                      : "Oracle Health",
+                  ],
+                  [
+                    "athena",
+                    vendorCounts ? `athena (${vendorCounts.athena.toLocaleString()})` : "athena",
+                  ],
+                  [
+                    "advancedmd",
+                    vendorCounts
+                      ? `AdvancedMD (${vendorCounts.advancedmd.toLocaleString()})`
+                      : "AdvancedMD",
+                  ],
+                  [
+                    "eclinicalworks",
+                    vendorCounts
+                      ? `eCW (${vendorCounts.eclinicalworks.toLocaleString()})`
+                      : "eCW",
+                  ],
+                  [
+                    "veradigm",
+                    vendorCounts
+                      ? `Veradigm (${vendorCounts.veradigm.toLocaleString()})`
+                      : "Veradigm",
+                  ],
+                ] as const
+              )
             ).map(([value, label]) => (
               <button
                 key={value}
@@ -189,7 +263,8 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
             </label>
             <span className="text-xs text-[var(--ink-soft)]">
               {indexed.toLocaleString()} endpoints
-              {!catalog && !catalogError ? " · loading…" : ""}
+              {!catalogMeta && !catalogError ? " · loading…" : ""}
+              {searching ? " · searching…" : ""}
               {catalogError ? ` · ${catalogError}` : ""}
             </span>
           </div>
@@ -229,16 +304,18 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
         </p>
 
         <ul className="overflow-hidden rounded-2xl bg-white/85 ring-1 ring-[var(--line)]">
-          {matches.length === 0 && (
+          {visibleMatches.length === 0 && (
             <li className="px-4 py-8 text-sm text-[var(--ink-soft)]">
-              {catalog
+              {catalogMeta
                 ? query
-                  ? "No matches. Try another name, switch vendor to All, or set access type to Any."
+                  ? searching
+                    ? "Searching…"
+                    : "No matches. Try another name, switch vendor to All, or set access type to Any."
                   : "Start typing a health system name above."
                 : "Loading catalog…"}
             </li>
           )}
-          {matches.map((m) => {
+          {visibleMatches.map((m) => {
             const active = selected?.id === m.id;
             return (
               <li key={m.id} className="border-b border-[var(--line)] last:border-b-0">
@@ -410,156 +487,4 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
       </section>
     </div>
   );
-}
-
-function EmbedSnippets({
-  fhirBase,
-  name,
-  copied,
-  onCopy,
-}: {
-  fhirBase: string;
-  name: string;
-  copied: string | null;
-  onCopy: (label: string, text: string) => void;
-}) {
-  const cli = `npx smartfind search "${name}"\nnpx smartfind scalekit ${fhirBase}`;
-  const js = `import { searchCatalog, discoverByFhirBase } from "smartfind";
-
-const matches = searchCatalog({ query: "${name}", limit: 5 });
-const { settings, scalekit } = await discoverByFhirBase(
-  matches[0]?.fhirBase ?? "${fhirBase}"
-);
-// scalekit.authorizationEndpoint, tokenEndpoint, audience, ...`;
-  const http = `GET /api/search?q=${encodeURIComponent(name)}&limit=5
-GET /api/enrich?fhirBase=${encodeURIComponent(fhirBase)}`;
-
-  return (
-    <div className="space-y-4 text-sm">
-      <p className="text-white/70">
-        Use the open-source package in Node, or call this demo’s HTTP API from your backend (not the browser — hospital FHIR hosts often block CORS).
-      </p>
-      <Snippet title="CLI" code={cli} label="cli" copied={copied} onCopy={onCopy} />
-      <Snippet title="JavaScript package" code={js} label="js" copied={copied} onCopy={onCopy} />
-      <Snippet title="HTTP API (this demo)" code={http} label="http" copied={copied} onCopy={onCopy} />
-      <p className="text-xs text-white/50">
-        Full developer guide:{" "}
-        <a href="/developers" className="text-[var(--sand)] underline">
-          /developers
-        </a>
-      </p>
-    </div>
-  );
-}
-
-function Snippet({
-  title,
-  code,
-  label,
-  copied,
-  onCopy,
-}: {
-  title: string;
-  code: string;
-  label: string;
-  copied: string | null;
-  onCopy: (label: string, text: string) => void;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-[0.14em] text-white/50">{title}</div>
-        <button
-          type="button"
-          onClick={() => onCopy(label, code)}
-          className="text-[11px] font-medium text-[var(--sand)] hover:underline"
-        >
-          {copied === label ? "Copied" : "Copy"}
-        </button>
-      </div>
-      <pre className="overflow-x-auto rounded-xl bg-black/30 p-3 text-xs text-[var(--sand)] whitespace-pre-wrap">
-        {code}
-      </pre>
-    </div>
-  );
-}
-
-function StepLabel({
-  n,
-  id,
-  title,
-}: {
-  n: number;
-  id: string;
-  title: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white">
-        {n}
-      </span>
-      <h2 id={id} className="font-display text-2xl font-semibold text-[var(--ink)]">
-        {title}
-      </h2>
-    </div>
-  );
-}
-
-function Badge({
-  children,
-  tone = "default",
-}: {
-  children: React.ReactNode;
-  tone?: "default" | "accent";
-}) {
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[11px] uppercase tracking-wide ring-1 ${
-        tone === "accent"
-          ? "bg-[var(--accent)]/15 text-[var(--accent-deep)] ring-[var(--accent)]/30"
-          : "bg-[var(--paper)] text-[var(--ink-soft)] ring-[var(--line)]"
-      }`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onCopy,
-  copied,
-}: {
-  label: string;
-  value: string;
-  onCopy: () => void;
-  copied: boolean;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <div className="text-xs uppercase tracking-[0.14em] text-white/50">
-          {label}
-        </div>
-        <button
-          type="button"
-          onClick={onCopy}
-          className="text-[11px] font-medium text-[var(--sand)] hover:underline"
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-      <code className="block break-all rounded-xl bg-black/25 px-3 py-2 text-xs text-white/90">
-        {value || "—"}
-      </code>
-    </div>
-  );
-}
-
-function displayVendor(vendor: string): string {
-  if (vendor === "oracle-health") return "Oracle Health";
-  if (vendor === "epic") return "Epic";
-  if (vendor === "smart-health-it") return "SMART Health IT";
-  return vendor;
 }
