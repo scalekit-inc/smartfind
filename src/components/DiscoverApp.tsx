@@ -117,14 +117,16 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
     };
   }, [deferredQuery, persona, vendor]);
 
-  const vendorCounts = {
-    epic: catalogMeta?.vendors.epic || 0,
-    oracle: catalogMeta?.vendors["oracle-health"] || 0,
-    athena: catalogMeta?.vendors.athena || 0,
-    advancedmd: catalogMeta?.vendors.advancedmd || 0,
-    eclinicalworks: catalogMeta?.vendors.eclinicalworks || 0,
-    veradigm: catalogMeta?.vendors.veradigm || 0,
-  };
+  const vendorCounts = catalogMeta
+    ? {
+        epic: catalogMeta.vendors.epic || 0,
+        oracle: catalogMeta.vendors["oracle-health"] || 0,
+        athena: catalogMeta.vendors.athena || 0,
+        advancedmd: catalogMeta.vendors.advancedmd || 0,
+        eclinicalworks: catalogMeta.vendors.eclinicalworks || 0,
+        veradigm: catalogMeta.vendors.veradigm || 0,
+      }
+    : null;
 
   async function runEnrich(opts: { id?: string; fhirBase?: string; entry?: CatalogEntry }) {
     if (opts.entry) setSelected(opts.entry);
@@ -163,12 +165,12 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
   const selectedName = selected?.name || enrich?.entry?.name || "Selected system";
   const vendorOptions = [
     ["any", "All vendors"],
-    ["epic", `Epic (${vendorCounts.epic})`],
-    ["oracle-health", `Oracle Health (${vendorCounts.oracle})`],
-    ["athena", `athena (${vendorCounts.athena})`],
-    ["advancedmd", `AdvancedMD (${vendorCounts.advancedmd})`],
-    ["eclinicalworks", `eCW (${vendorCounts.eclinicalworks})`],
-    ["veradigm", `Veradigm (${vendorCounts.veradigm})`],
+    ["epic", vendorCounts ? `Epic (${vendorCounts.epic.toLocaleString()})` : "Epic"],
+    ["oracle-health", vendorCounts ? `Oracle Health (${vendorCounts.oracle.toLocaleString()})` : "Oracle Health"],
+    ["athena", vendorCounts ? `athena (${vendorCounts.athena.toLocaleString()})` : "athena"],
+    ["advancedmd", vendorCounts ? `AdvancedMD (${vendorCounts.advancedmd.toLocaleString()})` : "AdvancedMD"],
+    ["eclinicalworks", vendorCounts ? `eCW (${vendorCounts.eclinicalworks.toLocaleString()})` : "eCW"],
+    ["veradigm", vendorCounts ? `Veradigm (${vendorCounts.veradigm.toLocaleString()})` : "Veradigm"],
   ] as const;
 
   return (
