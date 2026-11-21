@@ -1,0 +1,72 @@
+[
+  {
+    "developer": "athenahealth, Inc.",
+    "listUrl": "https://service-base-urls.api.fhir.athena.io/athena-fhir-service-base-urls.json",
+    "endpointCount": 23463
+  },
+  {
+    "developer": "eClinicalWorks, LLC",
+    "listUrl": "https://fhir.eclinicalworks.com/ecwopendev/global/practiceList",
+    "endpointCount": 18292
+  },
+  {
+    "developer": "Office Ally, LLC",
+    "listUrl": "https://fhirpt.officeally.com/fhir/r4/endpoints",
+    "endpointCount": 14079
+  },
+  {
+    "developer": "Darena Solutions LLC dba Darena Health",
+    "listUrl": "https://app.meldrx.com/api/Directories/fhir/endpoints",
+    "endpointCount": 1589
+  },
+  {
+    "developer": "AdvancedMD",
+    "listUrl": "https://providerapi.advancedmd.com/v1/r4/endpoints",
+    "endpointCount": 6048
+  },
+  {
+    "developer": "NextGen Healthcare",
+    "listUrl": "https://services.fhir.nextgen.com/FhirServiceBaseBundle-R4",
+    "endpointCount": 1
+  },
+  {
+    "developer": "PointClickCare Technologies Inc.",
+    "listUrl": "https://fhir.pointclickcare.com/R4endpoints.json",
+    "endpointCount": 4015
+  },
+  {
+    "developer": "Practice Fusion",
+    "listUrl": "https://www.practicefusion.com/assets/static_files/ServiceBaseURLs.json",
+    "endpointCount": 7164
+  },
+  {
+    "developer": "Elation Health, Inc.",
+    "listUrl": "https://fhir.elationemr.com/fhir/fhir-base-url",
+    "endpointCount": 1
+  },
+  {
+    "developer": "Veradigm, LLC",
+    "listUrl": "https://open.platform.veradigm.com/fhirendpoints/download/R4?endpointFilter=Patient",
+    "endpointCount": 1897
+  },
+  {
+    "developer": "Greenway Health, LLC",
+    "listUrl": "https://fhir-servicebaseurl.fhirhlprod.greenwayhealth.com/servicebundle.json",
+    "endpointCount": 1415
+  },
+  {
+    "developer": "Oracle Health",
+    "listUrl": "https://raw.githubusercontent.com/oracle-samples/ignite-endpoints/refs/heads/main/oracle_health_fhir_endpoints/millennium_patient_r4_endpoints.json",
+    "endpointCount": 1319
+  },
+  {
+    "developer": "Epic Systems Corporation",
+    "listUrl": "https://open.epic.com/Endpoints/Brands",
+    "endpointCount": 779
+  },
+  {
+    "developer": "Medical Information Technology, Inc. (MEDITECH)",
+    "listUrl": "https://fhir-apis.meditech.com/v1/brands",
+    "endpointCount": 0
+  }
+]
