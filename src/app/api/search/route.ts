@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get("q") || "";
     const vendor = searchParams.get("vendor") || undefined;
     const state = searchParams.get("state") || undefined;
-    const persona = (searchParams.get("persona") || "provider") as
+    const persona = (searchParams.get("persona") || "any") as
       | "provider"
       | "patient"
       | "both"

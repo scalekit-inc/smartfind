@@ -1,9 +1,19 @@
 export type Vendor =
   | "epic"
   | "oracle-health"
-  | "smart-health-it"
-  | "meditech"
+  | "advancedmd"
   | "athena"
+  | "eclinicalworks"
+  | "office-ally"
+  | "veradigm"
+  | "nextgen"
+  | "meditech"
+  | "pointclickcare"
+  | "practice-fusion"
+  | "greenway"
+  | "elation"
+  | "darena"
+  | "smart-health-it"
   | "other";
 
 export type Persona = "provider" | "patient" | "both";

@@ -4,10 +4,12 @@
   "private": true,
   "description": "Provider SMART on FHIR discovery demo site + smartfind package",
   "scripts": {
-    "catalog": "node scripts/build-catalog.mjs",
+    "catalog": "NODE_OPTIONS=--max-old-space-size=8192 node scripts/build-catalog.mjs",
+    "catalog:refresh-lantern": "NODE_OPTIONS=--max-old-space-size=8192 node scripts/build-catalog.mjs --refresh-lantern",
+    "sync-catalog": "mkdir -p data public/data && cp packages/smartfind/data/catalog.json data/catalog.json && cp packages/smartfind/data/catalog.json public/data/catalog.json",
     "build:package": "npm run build --prefix packages/smartfind",
-    "dev": "npm run build:package && next dev -H 127.0.0.1 -p 3847",
-    "build": "npm run build:package && next build",
+    "dev": "npm run sync-catalog && npm run build:package && next dev -H 127.0.0.1 -p 3847",
+    "build": "npm run sync-catalog && npm run build:package && next build",
     "start": "next start -H 127.0.0.1 -p 3847",
     "lint": "eslint .",
     "cli": "npm run build:package && node packages/smartfind/dist/cli.js"

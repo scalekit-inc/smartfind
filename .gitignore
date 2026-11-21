@@ -41,3 +41,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated catalog copies (source of truth: packages/smartfind/data/catalog.json)
+/data/catalog.json
+/public/data/catalog.json

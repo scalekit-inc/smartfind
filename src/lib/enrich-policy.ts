@@ -7,6 +7,7 @@ const ALLOWED_HOST_SUFFIXES = [
   "cerner.com",
   "oracle.com",
   "oraclecloud.com",
+  "advancedmd.com",
   "smarthealthit.org",
   "meditech.com",
   "athenahealth.com",
@@ -14,6 +15,12 @@ const ALLOWED_HOST_SUFFIXES = [
   "nextgen.com",
   "eclinicalworks.com",
   "veradigm.com",
+  "officeally.com",
+  "pointclickcare.com",
+  "practicefusion.com",
+  "greenwayhealth.com",
+  "elationemr.com",
+  "meldrx.com",
 ];
 
 function hostAllowed(hostname: string): boolean {
