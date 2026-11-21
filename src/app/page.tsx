@@ -2,6 +2,8 @@ import Link from "next/link";
 import { DiscoverApp } from "@/components/DiscoverApp";
 import { ensureCatalog } from "@/lib/catalog";
 
+export const dynamic = "force-dynamic";
+
 export default function HomePage() {
   const catalog = ensureCatalog();
 
