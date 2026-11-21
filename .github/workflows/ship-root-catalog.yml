@@ -1,0 +1,68 @@
+name: Ship root catalog gz
+
+on:
+  push:
+    branches:
+      - cursor/lantern-vendor-catalog-5dc7
+      - cursor/discover-app-extras-5dc7
+    paths:
+      - ".github/workflows/ship-root-catalog.yml"
+      - ".github/tmp/discover-app-part-*.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ship-root-catalog-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Assemble DiscoverApp and copy catalog gz
+        run: |
+          set -euo pipefail
+          if [ -f .github/tmp/discover-app-part-0.txt ]; then
+            cat .github/tmp/discover-app-part-0.txt \
+                .github/tmp/discover-app-part-1.txt \
+                .github/tmp/discover-app-part-2.txt \
+              > src/components/DiscoverApp.tsx
+            rm -f .github/tmp/discover-app-part-*.txt
+            rmdir .github/tmp 2>/dev/null || true
+            echo "Assembled DiscoverApp.tsx ($(wc -c < src/components/DiscoverApp.tsx) bytes)"
+          fi
+          test -f packages/smartfind/data/catalog.json.gz
+          mkdir -p data public/data
+          cp packages/smartfind/data/catalog.json.gz data/catalog.json.gz
+          cp packages/smartfind/data/catalog.json.gz public/data/catalog.json.gz
+          ls -la data/catalog.json.gz public/data/catalog.json.gz
+          git check-ignore -v data/catalog.json.gz public/data/catalog.json.gz || true
+
+      - name: Commit and push if needed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/catalog.json.gz
+          git add -f public/data/catalog.json.gz
+          if [ -f src/components/DiscoverApp.tsx ]; then
+            git add -f src/components/DiscoverApp.tsx
+          fi
+          if [ -d .github/tmp ]; then
+            git add -A .github/tmp || true
+            git add -u .github/tmp || true
+          fi
+          git status
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "Ensure top-level data/catalog.json.gz for Cursor hosting"
+          git push
