@@ -50,3 +50,4 @@ next-env.d.ts
 !/data/catalog.json.gz
 !/public/data/catalog.json.gz
 !/packages/smartfind/data/catalog.json.gz
+AGENTS.md
