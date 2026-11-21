@@ -30,6 +30,20 @@ export function toScalekitConnection(settings: SmartSettings): ScalekitSmartConn
       "Oracle Health (Cerner): provider authorize URLs are tenant-specific; confirm provider vs patient persona.",
     );
   }
+  if (settings.vendor === "advancedmd" || /advancedmd\.com/i.test(settings.fhirBase)) {
+    const officeId = settings.fhirBase.split("/").pop();
+    notes.push(
+      "AdvancedMD: authorization/token endpoints and aud are shared (providerapi.advancedmd.com/v1/r4); each practice still has its own office FHIR base in the catalog.",
+    );
+    if (officeId && officeId !== "r4") {
+      notes.push(`AdvancedMD office id from catalog FHIR base: ${officeId}.`);
+    }
+  }
+  if (settings.vendor === "athena" || /athenahealth\.com/i.test(settings.fhirBase)) {
+    notes.push(
+      "athenahealth: practice FHIR bases are often under api.platform.athenahealth.com/{practiceId}/…; confirm the exact aud your app registration expects.",
+    );
+  }
 
   const suggested = (settings.scopesSupported || [])
     .filter((s) =>

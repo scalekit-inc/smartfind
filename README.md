@@ -71,7 +71,11 @@ npm run dev          # http://127.0.0.1:3847
 ```
 
 ```bash
-npm run catalog      # refresh Epic + Oracle endpoint data
+# Rebuild catalog: Lantern index → vendor Bundles as source of truth
+NODE_OPTIONS=--max-old-space-size=8192 npm run catalog
+# Optional: refresh data/lantern-sources.json from Lantern first
+NODE_OPTIONS=--max-old-space-size=8192 npm run catalog -- --refresh-lantern
+
 npm run cli -- search "AdventHealth" --limit 5
 ```
 
@@ -102,9 +106,13 @@ A pre-release publishes under the `next` dist-tag; a normal release under `lates
 
 ## Catalog sources
 
-- [Epic R4 Endpoint Bundle](https://open.epic.com/Endpoints/R4)
-- [Oracle Health Millennium provider endpoints](https://raw.githubusercontent.com/oracle-samples/ignite-endpoints/refs/heads/main/oracle_health_fhir_endpoints/millennium_provider_r4_endpoints.json)
-- Public sandboxes (Epic, Oracle Health, SMART Health IT)
+Smartfind does **not** treat Lantern’s CSV as the catalog. Instead:
+
+1. **[Lantern](https://lantern.healthit.gov/)** (via committed `data/lantern-sources.json`, refreshable) discovers each vendor’s published Service Base URL list.
+2. Those **vendor Bundles/JSON files** are fetched as the source of truth (athena, eCW, AdvancedMD, Epic Brands, Oracle, Veradigm, …).
+3. A few curated supplements fill gaps Lantern’s patient-oriented CHPL lists omit (e.g. Oracle **provider** endpoints, Epic R4 Endpoint Bundle).
+
+Rebuild the **full** catalog with `npm run catalog`. Large vendor files (athena ~136MB, Epic Brands ~97MB) need a larger Node heap (`NODE_OPTIONS=--max-old-space-size=8192`). The committed `packages/smartfind/data/catalog.json` may be a searchable preview subset; after a full rebuild it grows to ~100k+ endpoints / tens of MB.
 
 ---
 
