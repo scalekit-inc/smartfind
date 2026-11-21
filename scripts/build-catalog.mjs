@@ -221,13 +221,16 @@ async function main() {
     entries: final,
   };
 
-  // Single source of truth lives in the package; sync copies for local Next assets.
-  const packageCatalog = join(root, "packages/smartfind/data/catalog.json");
-  mkdirSync(dirname(packageCatalog), { recursive: true });
-  writeFileSync(packageCatalog, JSON.stringify(out));
+  // Source of truth in git: gzipped package catalog. Uncompressed copies for local tools.
+  const { gzipSync } = await import("node:zlib");
+  const packageDir = join(root, "packages/smartfind/data");
+  mkdirSync(packageDir, { recursive: true });
+  const json = JSON.stringify(out);
+  writeFileSync(join(packageDir, "catalog.json"), json);
+  writeFileSync(join(packageDir, "catalog.json.gz"), gzipSync(Buffer.from(json)));
   for (const dir of [join(root, "data"), join(root, "public/data")]) {
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "catalog.json"), JSON.stringify(out));
+    writeFileSync(join(dir, "catalog.json"), json);
   }
 
   const byVendor = final.reduce((acc, e) => {
