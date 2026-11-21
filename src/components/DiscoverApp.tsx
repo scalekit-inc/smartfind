@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { type CatalogEntry } from "@/lib/search-entries";
 import { EmbedSnippets, StepLabel, Badge, Field, displayVendor } from "./DiscoverAppExtras";
 
@@ -50,7 +50,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
   const [persona, setPersona] = useState<Persona>("any");
   const [vendor, setVendor] = useState<VendorFilter>("any");
   const [matches, setMatches] = useState<CatalogEntry[]>([]);
-  const [searching, setSearching] = useState(false);
+  const [searchBusy, setSearchBusy] = useState(false);
   const [selected, setSelected] = useState<CatalogEntry | null>(null);
   const [enrich, setEnrich] = useState<EnrichResult | null>(null);
   const [manualUrl, setManualUrl] = useState("");
@@ -81,23 +81,23 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
     };
   }, []);
 
+  const searchQuery = deferredQuery.trim();
+  const searching = Boolean(searchQuery) && searchBusy;
+  // Derive empty results when the box is cleared — avoid sync setState in an effect.
+  const visibleMatches = searchQuery ? matches : [];
+
   // Server-side search — avoid downloading the full multi‑MB catalog to the browser.
   useEffect(() => {
-    const q = deferredQuery.trim();
-    if (!q) {
-      setMatches([]);
-      setSearching(false);
-      return;
-    }
+    if (!searchQuery) return;
     let cancelled = false;
-    setSearching(true);
     const params = new URLSearchParams({
-      q,
+      q: searchQuery,
       persona,
       limit: "15",
     });
     if (vendor !== "any") params.set("vendor", vendor);
     const handle = window.setTimeout(() => {
+      setSearchBusy(true);
       fetch(`/api/search?${params}`)
         .then((res) => res.json())
         .then((data: { matches?: CatalogEntry[]; error?: string }) => {
@@ -112,14 +112,14 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
           }
         })
         .finally(() => {
-          if (!cancelled) setSearching(false);
+          if (!cancelled) setSearchBusy(false);
         });
     }, 150);
     return () => {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [deferredQuery, persona, vendor]);
+  }, [searchQuery, persona, vendor]);
 
   const vendorCounts = catalogMeta
     ? {
@@ -194,15 +194,43 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
 
           <div className="mt-3 flex flex-wrap gap-2">
             {(
-              [
-                ["any", `All vendors`],
-                ["epic", vendorCounts ? `Epic (${vendorCounts.epic.toLocaleString()})` : "Epic"],
-                ["oracle-health", vendorCounts ? `Oracle Health (${vendorCounts.oracle.toLocaleString()})` : "Oracle Health"],
-                ["athena", vendorCounts ? `athena (${vendorCounts.athena.toLocaleString()})` : "athena"],
-                ["advancedmd", vendorCounts ? `AdvancedMD (${vendorCounts.advancedmd.toLocaleString()})` : "AdvancedMD"],
-                ["eclinicalworks", vendorCounts ? `eCW (${vendorCounts.eclinicalworks.toLocaleString()})` : "eCW"],
-                ["veradigm", vendorCounts ? `Veradigm (${vendorCounts.veradigm.toLocaleString()})` : "Veradigm"],
-              ] as const
+              (
+                [
+                  ["any", `All vendors`],
+                  [
+                    "epic",
+                    vendorCounts ? `Epic (${vendorCounts.epic.toLocaleString()})` : "Epic",
+                  ],
+                  [
+                    "oracle-health",
+                    vendorCounts
+                      ? `Oracle Health (${vendorCounts.oracle.toLocaleString()})`
+                      : "Oracle Health",
+                  ],
+                  [
+                    "athena",
+                    vendorCounts ? `athena (${vendorCounts.athena.toLocaleString()})` : "athena",
+                  ],
+                  [
+                    "advancedmd",
+                    vendorCounts
+                      ? `AdvancedMD (${vendorCounts.advancedmd.toLocaleString()})`
+                      : "AdvancedMD",
+                  ],
+                  [
+                    "eclinicalworks",
+                    vendorCounts
+                      ? `eCW (${vendorCounts.eclinicalworks.toLocaleString()})`
+                      : "eCW",
+                  ],
+                  [
+                    "veradigm",
+                    vendorCounts
+                      ? `Veradigm (${vendorCounts.veradigm.toLocaleString()})`
+                      : "Veradigm",
+                  ],
+                ] as const
+              )
             ).map(([value, label]) => (
               <button
                 key={value}
@@ -276,7 +304,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
         </p>
 
         <ul className="overflow-hidden rounded-2xl bg-white/85 ring-1 ring-[var(--line)]">
-          {matches.length === 0 && (
+          {visibleMatches.length === 0 && (
             <li className="px-4 py-8 text-sm text-[var(--ink-soft)]">
               {catalogMeta
                 ? query
@@ -287,7 +315,7 @@ export function DiscoverApp({ catalogCount }: { catalogCount: number }) {
                 : "Loading catalog…"}
             </li>
           )}
-          {matches.map((m) => {
+          {visibleMatches.map((m) => {
             const active = selected?.id === m.id;
             return (
               <li key={m.id} className="border-b border-[var(--line)] last:border-b-0">
