@@ -1,0 +1,56 @@
+name: Ship full catalog.gz
+
+on:
+  push:
+    branches:
+      - "cursor/discover-app-extras-5dc7"
+      - "cursor/lantern-vendor-catalog-5dc7"
+    paths:
+      - "packages/smartfind/data/.ship-full-catalog"
+
+permissions:
+  contents: write
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build full vendor catalog
+        run: NODE_OPTIONS=--max-old-space-size=8192 npm run catalog
+
+      - name: Commit catalog.json.gz
+        run: |
+          set -euo pipefail
+          test -f packages/smartfind/data/catalog.json.gz
+          python3 - <<'PY'
+          import gzip, json
+          from pathlib import Path
+          cat = json.loads(gzip.decompress(Path("packages/smartfind/data/catalog.json.gz").read_bytes()))
+          print("entries", cat.get("count"))
+          assert cat.get("count", 0) > 1000
+          PY
+          rm -f packages/smartfind/data/catalog.json
+          rm -f packages/smartfind/data/.ship-full-catalog
+          rm -f .github/workflows/ship-full-catalog.yml
+          rm -f .github/workflows/assemble-catalog-gz.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/smartfind/data/catalog.json.gz
+          git add -u
+          git status
+          git commit -m "Ship full Lantern vendor catalog and fix search ranking"
+          git push
