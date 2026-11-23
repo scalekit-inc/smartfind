@@ -5,8 +5,43 @@ import { normalizeFhirBase } from "./ssrf.js";
 /** Default time limit for one discovery request; pass your own `signal` to override. */
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+/**
+ * Some vendors publish per-tenant FHIR bases but serve SMART discovery on a shared root.
+ * AdvancedMD: .../v1/r4/{officeId} → .../v1/r4
+ * athena platform: .../{practiceId}/brand/.../fhir/r4 → .../fhir/r4 (best-effort)
+ */
+export function discoveryFhirBase(fhirBase: string): string {
+  const base = normalizeFhirBase(fhirBase);
+  try {
+    const u = new URL(base);
+    const host = u.hostname.toLowerCase();
+
+    if (/(^|\.)advancedmd\.com$/.test(host)) {
+      const match = u.pathname.match(/^(.*?\/v\d+\/r4)\/[^/]+$/i);
+      if (match) {
+        u.pathname = match[1];
+        u.search = "";
+        u.hash = "";
+        return u.toString().replace(/\/+$/, "");
+      }
+    }
+
+    if (/(^|\.)athenahealth\.com$/.test(host)) {
+      // Practice-branded paths still discover from the shared platform R4 root when present.
+      if (/\/fhir\/r4$/i.test(u.pathname) && u.pathname !== "/fhir/r4") {
+        const shared = new URL(u.origin);
+        shared.pathname = "/fhir/r4";
+        return shared.toString().replace(/\/+$/, "");
+      }
+    }
+  } catch {
+    return base;
+  }
+  return base;
+}
+
 export function smartConfigurationUrl(fhirBase: string): string {
-  return `${fhirBase.replace(/\/+$/, "")}/.well-known/smart-configuration`;
+  return `${discoveryFhirBase(fhirBase).replace(/\/+$/, "")}/.well-known/smart-configuration`;
 }
 
 export function fhirServerDomain(fhirBase: string): string {
@@ -18,19 +53,32 @@ export function fhirServerDomain(fhirBase: string): string {
   }
 }
 
+function isAdvancedMd(fhirBase: string): boolean {
+  try {
+    return /(^|\.)advancedmd\.com$/i.test(new URL(fhirBase).hostname);
+  } catch {
+    return /advancedmd\.com/i.test(fhirBase);
+  }
+}
+
 export function toSmartSettings(
   fhirBase: string,
   config: SmartConfiguration,
   meta?: Partial<CatalogEntry>,
 ): SmartSettings {
   const base = fhirBase.replace(/\/+$/, "");
+  const discoveryBase = discoveryFhirBase(base);
+  const audience = isAdvancedMd(base)
+    ? String(config.issuer || discoveryBase).replace(/\/+$/, "")
+    : base;
+
   return {
     name: meta?.name,
     vendor: meta?.vendor,
     persona: meta?.persona,
     fhirBase: base,
-    audience: base,
-    fhirServerDomain: fhirServerDomain(base),
+    audience,
+    fhirServerDomain: fhirServerDomain(isAdvancedMd(base) ? audience : base),
     authorizationEndpoint: config.authorization_endpoint,
     tokenEndpoint: config.token_endpoint,
     registrationEndpoint: config.registration_endpoint,
@@ -54,7 +102,6 @@ export async function fetchSmartConfiguration(
   const url = smartConfigurationUrl(safeBase);
 
   try {
-    // guarded-fetch (Vercel Labs): SSRF + DNS pin + redirect/header hardening.
     const { signal, headers, ...rest } = init || {};
     const res = await guardedFetch(url, {
       ...rest,

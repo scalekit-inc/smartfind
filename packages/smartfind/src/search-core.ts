@@ -4,17 +4,59 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+type Prepared = { name: string; paddedName: string; hay: string; paddedHay: string };
+
+/** Normalized text per entry, computed once instead of on every search. */
+const prepared = new WeakMap<CatalogEntry, Prepared>();
+
+function prepare(entry: CatalogEntry): Prepared {
+  let p = prepared.get(entry);
+  if (!p) {
+    const name = normalize(entry.name);
+    const hay = normalize(
+      [entry.name, ...(entry.aliases || []), entry.city || "", entry.state || "", entry.vendor].join(
+        " ",
+      ),
+    );
+    p = { name, paddedName: ` ${name} `, hay, paddedHay: ` ${hay} ` };
+    prepared.set(entry, p);
+  }
+  return p;
+}
+
+/** True when `token` appears as its own word in a space-padded normalized string. */
+function wordMatch(padded: string, token: string): boolean {
+  return padded.includes(` ${token} `);
+}
+
 function scoreEntry(entry: CatalogEntry, tokens: string[]): number {
   if (tokens.length === 0) return 1;
-  const hay = normalize(
-    [entry.name, ...(entry.aliases || []), entry.city || "", entry.state || "", entry.vendor, entry.fhirBase].join(" "),
-  );
+  const { name, paddedName, hay, paddedHay } = prepare(entry);
   let score = 0;
   for (const token of tokens) {
     if (!token) continue;
-    if (hay.includes(token)) score += token.length >= 4 ? 3 : 2;
-    else if (normalize(entry.name).startsWith(token)) score += 4;
-    else return -1;
+    if (name === token) {
+      score += 20;
+      continue;
+    }
+    if (name.startsWith(`${token} `) || name.startsWith(token)) {
+      score += 12;
+      continue;
+    }
+    if (wordMatch(paddedName, token)) {
+      score += 10;
+      continue;
+    }
+    if (wordMatch(paddedHay, token)) {
+      score += 6;
+      continue;
+    }
+    // Substring hits only for longer tokens (avoids "mayo" → "Tamayo").
+    if (token.length >= 5 && hay.includes(token)) {
+      score += 2;
+      continue;
+    }
+    return -1;
   }
   if (entry.persona === "provider" || entry.persona === "both") score += 1;
   if (entry.source === "sandbox") score += 2;

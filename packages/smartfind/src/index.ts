@@ -21,6 +21,7 @@ export {
 export { searchEntries } from "./search-core.js";
 
 export {
+  discoveryFhirBase,
   enrichFhirBase,
   fetchSmartConfiguration,
   fhirServerDomain,

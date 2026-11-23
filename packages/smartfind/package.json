@@ -10,14 +10,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./catalog.json": "./data/catalog.json"
+    "./catalog.json.gz": "./data/catalog.json.gz"
   },
   "bin": {
     "smartfind": "./dist/cli.js"
   },
   "files": [
     "dist",
-    "data",
+    "data/catalog.json.gz",
     "README.md",
     "LICENSE"
   ],

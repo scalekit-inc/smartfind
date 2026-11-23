@@ -41,3 +41,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated uncompressed catalogs (too large for git). Source of truth: *.json.gz
+/data/catalog.json
+/public/data/catalog.json
+/packages/smartfind/data/catalog.json
+# Keep the gzipped catalogs in git.
+!/data/catalog.json.gz
+!/packages/smartfind/data/catalog.json.gz

@@ -1,99 +1,102 @@
 #!/usr/bin/env node
 /**
- * Rebuild data/catalog.json from public Epic + Oracle Health endpoint lists.
- * Run: node scripts/build-catalog.mjs
+ * Rebuild data/catalog.json
+ *
+ * Architecture:
+ *   1. Lantern (or committed data/lantern-sources.json) → discover vendor list URLs
+ *   2. Fetch each vendor's published Bundle/JSON as the source of truth
+ *   3. Normalize → catalog.json
+ *
+ * Usage:
+ *   node scripts/build-catalog.mjs
+ *   node scripts/build-catalog.mjs --refresh-lantern
+ *   node scripts/build-catalog.mjs --vendors=athena,advancedmd,epic
+ *
+ * Large Bundles (athena ~136MB, Epic Brands ~97MB):
+ *   NODE_OPTIONS=--max-old-space-size=8192 npm run catalog
  */
-import { createHash } from "node:crypto";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  CURATED_SUPPLEMENTS,
+  VENDOR_PRESETS,
+  selectListUrls,
+} from "./catalog/vendors.mjs";
+import { dedupeByFhirBase, parseFhirBundle } from "./catalog/parse-fhir-bundle.mjs";
+import { applyCatalogFixes, ensureUniqueIds } from "./catalog/fixes.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const EPIC_R4 = "https://open.epic.com/Endpoints/R4";
-const CERNER_PROVIDER =
-  "https://raw.githubusercontent.com/oracle-samples/ignite-endpoints/refs/heads/main/oracle_health_fhir_endpoints/millennium_provider_r4_endpoints.json";
+const LANTERN_FALLBACK = join(root, "data/lantern-sources.json");
 
-function slugify(s) {
-  return (
-    String(s || "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "")
-      .slice(0, 80) || "unknown"
-  );
-}
+const args = process.argv.slice(2);
+const refreshLantern = args.includes("--refresh-lantern");
+const vendorsArg = args.find((a) => a.startsWith("--vendors="));
+const onlyVendors = vendorsArg
+  ? new Set(
+      vendorsArg
+        .slice("--vendors=".length)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )
+  : null;
 
-function idFor(vendor, name, fhir) {
-  return `${vendor}-${slugify(name)}-${createHash("sha1").update(fhir).digest("hex").slice(0, 8)}`;
-}
-
-async function main() {
-  console.log("Downloading Epic R4 endpoint bundle…");
-  const epic = await (await fetch(EPIC_R4)).json();
-  console.log("Downloading Oracle Health provider endpoints…");
-  const cerner = await (await fetch(CERNER_PROVIDER)).json();
-
-  const entries = [];
-
-  for (const e of epic.entry || []) {
-    const r = e.resource || {};
-    if (r.resourceType !== "Endpoint") continue;
-    const fhirBase = String(r.address || "").replace(/\/+$/, "");
-    const name = r.name || fhirBase;
-    if (!fhirBase) continue;
-    entries.push({
-      id: idFor("epic", name, fhirBase),
-      name,
-      aliases: [],
-      vendor: "epic",
-      // Public Epic list is patient-access oriented; base URL is commonly reused as iss/aud.
-      persona: "both",
-      fhirBase,
-      state: null,
-      city: null,
-      source: "epic-r4-endpoint-bundle",
+function loadLanternSources() {
+  if (refreshLantern) {
+    console.log("Refreshing Lantern source index…");
+    const py = join(root, "scripts/catalog/extract-lantern-sources.py");
+    const result = spawnSync("python3", [py], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 300_000,
     });
-  }
-
-  const orgs = new Map();
-  const endpoints = new Map();
-  for (const e of cerner.entry || []) {
-    const r = e.resource || {};
-    if (r.resourceType === "Organization") orgs.set(r.id, r);
-    if (r.resourceType === "Endpoint") {
-      endpoints.set(r.id, r);
-      if (e.fullUrl) endpoints.set(e.fullUrl, r);
+    if (result.status !== 0) {
+      console.warn(
+        "Lantern refresh failed; using committed fallback.",
+        result.stderr || result.error,
+      );
+    } else {
+      const sources = JSON.parse(result.stdout);
+      writeFileSync(LANTERN_FALLBACK, `${JSON.stringify(sources, null, 2)}\n`);
+      console.log(`Wrote ${sources.length} Lantern sources → data/lantern-sources.json`);
+      return sources;
     }
   }
+  return JSON.parse(readFileSync(LANTERN_FALLBACK, "utf8"));
+}
 
-  for (const org of orgs.values()) {
-    const name = org.name || "Unknown";
-    const aliases = Array.isArray(org.alias) ? org.alias : [];
-    const addr = (org.address && org.address[0]) || {};
-    for (const ref of org.endpoint || []) {
-      const refStr = ref.reference;
-      if (!refStr) continue;
-      const ep =
-        endpoints.get(refStr) ||
-        endpoints.get(refStr.split("/").pop());
-      if (!ep) continue;
-      const fhirBase = String(ep.address || "").replace(/\/+$/, "");
-      if (!fhirBase) continue;
-      entries.push({
-        id: idFor("cerner", name, fhirBase),
-        name,
-        aliases,
-        vendor: "oracle-health",
-        persona: "provider",
-        fhirBase,
-        state: addr.state || null,
-        city: addr.city || null,
-        source: "oracle-millennium-provider-r4",
-      });
-    }
+async function fetchJson(url) {
+  const res = await fetch(url, {
+    headers: { Accept: "application/fhir+json, application/json;q=0.9, */*;q=0.1" },
+    redirect: "follow",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/** athena's Bundle (~136MB) overflows Node's JSON stack; parse via Python. */
+function parseLargeBundleWithPython(url, vendor, persona) {
+  const py = join(root, "scripts/catalog/parse-vendor-bundle.py");
+  const result = spawnSync("python3", [py, url, vendor, persona], {
+    encoding: "utf8",
+    maxBuffer: 512 * 1024 * 1024,
+    timeout: 600_000,
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.error || "python parse failed");
   }
+  // stdout is JSON array; stderr has a progress comment
+  const lines = result.stdout.trim().split("\n");
+  const jsonLine = lines.filter((l) => l.startsWith("[") || l.startsWith("{")).join("\n");
+  return JSON.parse(jsonLine || result.stdout);
+}
 
-  const sandboxes = [
+const LARGE_BUNDLE_HOSTS = ["service-base-urls.api.fhir.athena.io"];
+
+function sandboxes() {
+  return [
     {
       id: "sandbox-epic-r4",
       name: "Epic FHIR Sandbox (R4)",
@@ -118,65 +121,124 @@ async function main() {
       source: "sandbox",
     },
     {
+      id: "sandbox-advancedmd-r4",
+      name: "AdvancedMD FHIR Shared R4 (SMART discovery)",
+      aliases: ["AdvancedMD", "providerapi.advancedmd.com"],
+      vendor: "advancedmd",
+      persona: "both",
+      fhirBase: "https://providerapi.advancedmd.com/v1/r4",
+      state: null,
+      city: null,
+      source: "sandbox",
+    },
+    {
+      id: "sandbox-athena-r4",
+      name: "athenahealth FHIR Platform R4",
+      aliases: ["athena", "api.platform.athenahealth.com"],
+      vendor: "athena",
+      persona: "both",
+      fhirBase: "https://api.platform.athenahealth.com/fhir/r4",
+      state: null,
+      city: null,
+      source: "sandbox",
+    },
+    {
       id: "sandbox-smart-r4",
       name: "SMART Health IT R4 Sandbox",
       aliases: ["SMART Sandbox", "smarthealthit"],
       vendor: "smart-health-it",
       persona: "both",
-      fhirBase: "https://r4.smarthealthit.org",
+      fhirBase: "https://launch.smarthealthit.org/v/r4/fhir",
       state: null,
       city: null,
       source: "sandbox",
     },
   ];
+}
 
-  const byBase = new Map();
-  for (const e of [...sandboxes, ...entries]) {
-    const key = e.fhirBase.toLowerCase();
-    const cur = byBase.get(key);
-    if (!cur) {
-      byBase.set(key, e);
-      continue;
+async function main() {
+  const lanternSources = loadLanternSources();
+
+  /** @type {{ developer: string, vendor: string, listUrl: string, persona: string }[]} */
+  const jobs = [];
+
+  for (const preset of VENDOR_PRESETS) {
+    if (onlyVendors && !onlyVendors.has(preset.vendor)) continue;
+    const selected = selectListUrls(lanternSources, preset);
+    for (const s of selected) {
+      jobs.push({
+        developer: s.developer,
+        vendor: preset.vendor,
+        listUrl: s.listUrl,
+        persona: preset.persona || "both",
+      });
     }
-    const aliases = [
-      ...new Set([
-        ...(cur.aliases || []),
-        ...(e.aliases || []),
-        cur.name !== e.name ? e.name : null,
-      ].filter(Boolean)),
-    ].slice(0, 12);
-    const prefer =
-      e.persona === "provider" && cur.persona !== "provider" ? { ...e } : { ...cur };
-    prefer.aliases = aliases;
-    if (
-      (e.persona === "provider" || cur.persona === "provider") &&
-      (e.persona === "patient" || cur.persona === "patient")
-    ) {
-      prefer.persona = "both";
-    }
-    byBase.set(key, prefer);
   }
 
-  const final = [...byBase.values()].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+  for (const s of CURATED_SUPPLEMENTS) {
+    if (onlyVendors && !onlyVendors.has(s.vendor)) continue;
+    if (jobs.some((j) => j.listUrl === s.listUrl)) continue;
+    jobs.push({
+      developer: s.developer,
+      vendor: s.vendor,
+      listUrl: s.listUrl,
+      persona: s.persona || "both",
+    });
+  }
+
+  console.log(`Ingesting ${jobs.length} vendor list(s)…`);
+  const all = [];
+  const sourcesUsed = [];
+
+  for (const job of jobs) {
+    console.log(`  ${job.vendor} ← ${job.listUrl}`);
+    try {
+      let parsed;
+      if (LARGE_BUNDLE_HOSTS.some((h) => job.listUrl.includes(h))) {
+        parsed = parseLargeBundleWithPython(job.listUrl, job.vendor, job.persona);
+      } else {
+        const bundle = await fetchJson(job.listUrl);
+        parsed = parseFhirBundle(bundle, {
+          vendor: job.vendor,
+          source: job.listUrl,
+          persona: job.persona,
+        });
+      }
+      all.push(...parsed);
+      sourcesUsed.push(job.listUrl);
+      console.log(`    → ${parsed.length} entries`);
+    } catch (err) {
+      console.warn(`    ! skipped: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  const final = ensureUniqueIds(dedupeByFhirBase(applyCatalogFixes([...sandboxes(), ...all])));
   const out = {
-    version: 1,
+    version: 2,
     generatedAt: new Date().toISOString(),
-    sources: [EPIC_R4, CERNER_PROVIDER, "sandbox"],
+    index: "lantern+curated",
+    sources: [...new Set([...sourcesUsed, "sandbox"])],
     count: final.length,
     entries: final,
   };
 
-  for (const dir of [
-    join(root, "data"),
-    join(root, "packages/smartfind/data"),
-    join(root, "public/data"),
-  ]) {
+  // Source of truth in git: gzipped package catalog. Uncompressed copies for local tools.
+  const { gzipSync } = await import("node:zlib");
+  const packageDir = join(root, "packages/smartfind/data");
+  mkdirSync(packageDir, { recursive: true });
+  const json = JSON.stringify(out);
+  writeFileSync(join(packageDir, "catalog.json"), json);
+  writeFileSync(join(packageDir, "catalog.json.gz"), gzipSync(Buffer.from(json)));
+  for (const dir of [join(root, "data"), join(root, "public/data")]) {
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "catalog.json"), JSON.stringify(out));
+    writeFileSync(join(dir, "catalog.json"), json);
   }
-  console.log(`Wrote ${final.length} entries`);
+
+  const byVendor = final.reduce((acc, e) => {
+    acc[e.vendor] = (acc[e.vendor] || 0) + 1;
+    return acc;
+  }, {});
+  console.log(`Wrote ${final.length} unique FHIR bases`, byVendor);
 }
 
 main().catch((err) => {
