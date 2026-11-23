@@ -25,6 +25,7 @@ import {
   selectListUrls,
 } from "./catalog/vendors.mjs";
 import { dedupeByFhirBase, parseFhirBundle } from "./catalog/parse-fhir-bundle.mjs";
+import { applyCatalogFixes, ensureUniqueIds } from "./catalog/fixes.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LANTERN_FALLBACK = join(root, "data/lantern-sources.json");
@@ -147,7 +148,7 @@ function sandboxes() {
       aliases: ["SMART Sandbox", "smarthealthit"],
       vendor: "smart-health-it",
       persona: "both",
-      fhirBase: "https://r4.smarthealthit.org",
+      fhirBase: "https://launch.smarthealthit.org/v/r4/fhir",
       state: null,
       city: null,
       source: "sandbox",
@@ -211,7 +212,7 @@ async function main() {
     }
   }
 
-  const final = dedupeByFhirBase([...sandboxes(), ...all]);
+  const final = ensureUniqueIds(dedupeByFhirBase(applyCatalogFixes([...sandboxes(), ...all])));
   const out = {
     version: 2,
     generatedAt: new Date().toISOString(),
