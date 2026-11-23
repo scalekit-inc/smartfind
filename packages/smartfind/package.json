@@ -10,7 +10,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./catalog.json": "./data/catalog.json",
     "./catalog.json.gz": "./data/catalog.json.gz"
   },
   "bin": {
@@ -18,7 +17,7 @@
   },
   "files": [
     "dist",
-    "data",
+    "data/catalog.json.gz",
     "README.md",
     "LICENSE"
   ],
@@ -37,14 +36,14 @@
     "oauth",
     "discovery"
   ],
-  "author": "Smartfind contributors",
+  "author": "Scalekit Inc.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/scalekit-inc/smartfind.git",
     "directory": "packages/smartfind"
   },
-  "homepage": "https://smartfind.apps.grok.bot",
+  "homepage": "https://github.com/scalekit-inc/smartfind#readme",
   "bugs": {
     "url": "https://github.com/scalekit-inc/smartfind/issues"
   },

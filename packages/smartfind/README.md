@@ -66,19 +66,17 @@ npx smartfind scalekit https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b7
 | `toScalekitConnection(settings)` | Map settings → Scalekit connection fields |
 | `getCatalog()` / `setCatalog(catalog)` | Inspect or replace catalog data |
 
-Catalog JSON is also importable:
+The catalog ships gzipped as `smartfind/catalog.json.gz`. To read it, call `getCatalog()`:
 
 ```ts
-import catalog from "smartfind/catalog.json" with { type: "json" };
+import { getCatalog } from "smartfind";
+
+const { entries } = getCatalog();
 ```
 
 ## Catalog
 
-Bundled data (~1.8k endpoints) from:
-
-- [Epic R4 Endpoint Bundle](https://open.epic.com/Endpoints/R4)
-- [Oracle Health provider R4 endpoints](https://github.com/oracle-samples/ignite-endpoints)
-- Public sandboxes
+Bundled endpoint data comes from the EHR vendors' own published Service Base URL lists, found through [Lantern](https://lantern.healthit.gov/) (Epic, Oracle Health, athenahealth, eClinicalWorks, AdvancedMD, NextGen, Veradigm and others), plus curated provider endpoints and public sandboxes.
 
 Rebuild from the monorepo root: `npm run catalog`.
 

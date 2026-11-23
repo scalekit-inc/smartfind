@@ -1,70 +1,26 @@
 import { gunzipSync } from "node:zlib";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Catalog, CatalogEntry, SearchOptions } from "./types.js";
 import { searchEntries } from "./search-core.js";
 
+/** The catalog bundled with this package: data/ next to dist/. Apps that bundle this
+ * package (e.g. Next.js) can load the file themselves and pass it to setCatalog(). */
+const CATALOG_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "catalog.json.gz");
+
 let cached: Catalog | null = null;
-
-function candidateCatalogPaths(): string[] {
-  const paths: string[] = [];
-  const push = (p: string) => {
-    if (p && !paths.includes(p)) paths.push(p);
-  };
-
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    // dist/catalog.js → ../data/
-    push(join(here, "..", "data", "catalog.json.gz"));
-    push(join(here, "..", "data", "catalog.json"));
-    // Sometimes bundled next to source
-    push(join(here, "data", "catalog.json.gz"));
-    push(join(here, "data", "catalog.json"));
-  } catch {
-    // import.meta.url unavailable in some bundles
-  }
-
-  const cwd = typeof process !== "undefined" ? process.cwd() : "";
-  if (cwd) {
-    push(join(cwd, "packages/smartfind/data/catalog.json.gz"));
-    push(join(cwd, "packages/smartfind/data/catalog.json"));
-    push(join(cwd, "data/catalog.json.gz"));
-    push(join(cwd, "data/catalog.json"));
-    push(join(cwd, "node_modules/smartfind/data/catalog.json.gz"));
-    push(join(cwd, "node_modules/smartfind/data/catalog.json"));
-  }
-
-  return paths;
-}
-
-function loadFromPath(path: string): Catalog {
-  if (path.endsWith(".gz")) {
-    const raw = gunzipSync(readFileSync(path)).toString("utf8");
-    return JSON.parse(raw) as Catalog;
-  }
-  return JSON.parse(readFileSync(path, "utf8")) as Catalog;
-}
 
 function loadDefaultCatalog(): Catalog {
   if (cached) return cached;
-
-  const tried: string[] = [];
-  for (const path of candidateCatalogPaths()) {
-    tried.push(path);
-    if (!existsSync(path)) continue;
-    try {
-      cached = loadFromPath(path);
-      return cached;
-    } catch (err) {
-      // try next candidate
-      console.warn(`smartfind: failed to load catalog from ${path}:`, err);
-    }
+  let gz: Buffer;
+  try {
+    gz = readFileSync(CATALOG_PATH);
+  } catch (err) {
+    throw new Error(`smartfind: bundled catalog not found at ${CATALOG_PATH}`, { cause: err });
   }
-
-  throw new Error(
-    `smartfind catalog not found. Tried:\n${tried.map((p) => `  - ${p}`).join("\n")}`,
-  );
+  cached = JSON.parse(gunzipSync(gz).toString("utf8")) as Catalog;
+  return cached;
 }
 
 export function getCatalog(): Catalog {

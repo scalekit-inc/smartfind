@@ -4,23 +4,34 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+type Prepared = { name: string; paddedName: string; hay: string; paddedHay: string };
+
+/** Normalized text per entry, computed once instead of on every search. */
+const prepared = new WeakMap<CatalogEntry, Prepared>();
+
+function prepare(entry: CatalogEntry): Prepared {
+  let p = prepared.get(entry);
+  if (!p) {
+    const name = normalize(entry.name);
+    const hay = normalize(
+      [entry.name, ...(entry.aliases || []), entry.city || "", entry.state || "", entry.vendor].join(
+        " ",
+      ),
+    );
+    p = { name, paddedName: ` ${name} `, hay, paddedHay: ` ${hay} ` };
+    prepared.set(entry, p);
+  }
+  return p;
 }
 
-/** True when `token` appears as its own word in normalized haystack. */
-function wordMatch(hay: string, token: string): boolean {
-  return new RegExp(`(?:^| )${escapeRe(token)}(?: |$)`).test(` ${hay} `);
+/** True when `token` appears as its own word in a space-padded normalized string. */
+function wordMatch(padded: string, token: string): boolean {
+  return padded.includes(` ${token} `);
 }
 
 function scoreEntry(entry: CatalogEntry, tokens: string[]): number {
   if (tokens.length === 0) return 1;
-  const name = normalize(entry.name);
-  const hay = normalize(
-    [entry.name, ...(entry.aliases || []), entry.city || "", entry.state || "", entry.vendor].join(
-      " ",
-    ),
-  );
+  const { name, paddedName, hay, paddedHay } = prepare(entry);
   let score = 0;
   for (const token of tokens) {
     if (!token) continue;
@@ -32,11 +43,11 @@ function scoreEntry(entry: CatalogEntry, tokens: string[]): number {
       score += 12;
       continue;
     }
-    if (wordMatch(name, token)) {
+    if (wordMatch(paddedName, token)) {
       score += 10;
       continue;
     }
-    if (wordMatch(hay, token)) {
+    if (wordMatch(paddedHay, token)) {
       score += 6;
       continue;
     }

@@ -46,7 +46,6 @@ next-env.d.ts
 /data/catalog.json
 /public/data/catalog.json
 /packages/smartfind/data/catalog.json
-# Keep gzipped catalogs in git (package + top-level for Cursor hosting).
+# Keep the gzipped catalogs in git.
 !/data/catalog.json.gz
 !/packages/smartfind/data/catalog.json.gz
-AGENTS.md
